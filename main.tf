@@ -25,12 +25,12 @@ data "aws_ami" "ubuntu" {
     values = ["hvm"]
   }
 
-  owners = ["099720109477"] # Canonical owner ID
+  owners = ["099720109477"]
 }
 
 # 2. Firewall Rule (Security Group)
 resource "aws_security_group" "starrocks_sg" {
-  name        = "starrocks-on-demand-sg"
+  name_prefix = "starrocks-sg-" # Generates a unique name dynamically
   description = "Allow MySQL access to StarRocks"
 
   ingress {
@@ -55,12 +55,12 @@ resource "aws_security_group" "starrocks_sg" {
   }
 }
 
-# 3. AWS EC2 Server (Using allowed t3.micro instance type)
+# 3. AWS EC2 Server
 resource "aws_instance" "starrocks_server" {
   ami           = data.aws_ami.ubuntu.id
-  instance_type = "t3.micro" # Changed from t3.large to pass KodeKloud SCP restrictions
+  instance_type = "t3.micro"
 
-  security_groups = [aws_security_group.starrocks_sg.name]
+  vpc_security_group_ids = [aws_security_group.starrocks_sg.id] # Reference by ID instead of name
 
   user_data = <<-EOF
               #!/bin/bash
