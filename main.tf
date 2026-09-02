@@ -30,7 +30,7 @@ data "aws_ami" "ubuntu" {
 
 # 2. Firewall Rule (Security Group)
 resource "aws_security_group" "starrocks_sg" {
-  name_prefix = "starrocks-sg-" # Generates a unique name dynamically
+  name_prefix = "starrocks-sg-"
   description = "Allow MySQL access to StarRocks"
 
   ingress {
@@ -60,17 +60,24 @@ resource "aws_instance" "starrocks_server" {
   ami           = data.aws_ami.ubuntu.id
   instance_type = "t3.micro"
 
-  vpc_security_group_ids = [aws_security_group.starrocks_sg.id] # Reference by ID instead of name
+  vpc_security_group_ids = [aws_security_group.starrocks_sg.id]
 
   user_data = <<-EOF
               #!/bin/bash
               apt-get update -y
               apt-get install -y docker.io
+
+              # Enable 2GB Swap Memory to ensure StarRocks fits in t3.micro RAM
+              fallocate -l 2G /swapfile
+              chmod 600 /swapfile
+              mkswap /swapfile
+              swapon /swapfile
+
               systemctl start docker
               systemctl enable docker
 
-              # Run all-in-one StarRocks container
-              docker run -p 9030:9030 -p 8030:8030 -p 8040:8040 -itd --name starrocks starrocks/all-in-1-ubuntu
+              # Pull and run valid official StarRocks image
+              docker run -p 9030:9030 -p 8030:8030 -p 8040:8040 -itd --name starrocks starrocks/all-in-one-ubuntu
               EOF
 
   tags = {
