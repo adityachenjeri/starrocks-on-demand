@@ -25,7 +25,7 @@ data "aws_ami" "ubuntu" {
     values = ["hvm"]
   }
 
-  owners = ["099720109477"]
+  owners = ["099720109477"] # Canonical
 }
 
 # 2. Firewall Rule (Security Group)
@@ -40,6 +40,7 @@ resource "aws_security_group" "starrocks_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  # StarRocks MySQL Client Port
   ingress {
     from_port   = 9030
     to_port     = 9030
@@ -62,23 +63,27 @@ resource "aws_instance" "starrocks_server" {
 
   vpc_security_group_ids = [aws_security_group.starrocks_sg.id]
 
+  # User Data Script: Pre-installs clients, configures 4GB swap space, and launches StarRocks
   user_data = <<-EOF
               #!/bin/bash
               apt-get update -y
-              apt-get install -y docker.io
+              apt-get install -y docker.io mysql-client-core-8.0
 
-              # Setup 2GB Swap Memory to keep t3.micro stable
-              fallocate -l 2G /swapfile
+              # Create 4GB Swap Space so Java JVM can allocate heap on t3.micro
+              fallocate -l 4G /swapfile
               chmod 600 /swapfile
               mkswap /swapfile
               swapon /swapfile
+              echo '/swapfile none swap sw 0 0' >> /etc/fstab
 
               systemctl start docker
               systemctl enable docker
 
-              # Run official StarRocks Frontend container (FE)
+              # Launch StarRocks FE with sufficient 1GB heap allocation supported by swap
               docker run -d \
                 --name starrocks-fe \
+                --restart always \
+                -e JAVA_OPTS="-Xmx1024m -Xms1024m" \
                 -p 9030:9030 \
                 -p 8030:8030 \
                 -p 9020:9020 \
@@ -90,7 +95,7 @@ resource "aws_instance" "starrocks_server" {
   }
 }
 
-# 4. Connection Output
+# 4. Connection Output Link for Data Team
 output "data_team_connection_string" {
   value       = "mysql -h ${aws_instance.starrocks_server.public_ip} -P 9030 -u root"
   description = "Share this connection command with the Data Analysis team"
