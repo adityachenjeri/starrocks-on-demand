@@ -11,7 +11,7 @@ provider "aws" {
   region = "us-east-1"
 }
 
-# 1. Fetch latest official Ubuntu 22.04 AMI dynamically
+# 1. Dynamic AMI Lookup
 data "aws_ami" "ubuntu" {
   most_recent = true
 
@@ -60,7 +60,6 @@ resource "aws_instance" "starrocks_server" {
   ami           = data.aws_ami.ubuntu.id
   instance_type = "t3.micro"
 
-  # Fix for 'No space left on device': Expand EBS Root Disk to 20GB
   root_block_device {
     volume_size           = 20
     volume_type           = "gp3"
@@ -74,7 +73,7 @@ resource "aws_instance" "starrocks_server" {
               apt-get update -y
               apt-get install -y docker.io mysql-client-core-8.0
 
-              # 4GB Swap Space
+              # 4GB Swap allocation for t3.micro memory buffer
               fallocate -l 4G /swapfile
               chmod 600 /swapfile
               mkswap /swapfile
@@ -84,13 +83,12 @@ resource "aws_instance" "starrocks_server" {
               systemctl start docker
               systemctl enable docker
 
-              # Launch StarRocks FE
+              # Run FE with HOST_TYPE flag to allow single-node standalone startup
               docker run -d \
                 --name starrocks-fe \
                 --net=host \
                 --restart always \
-                -e FE_SERVERS="fe1:127.0.0.1:9010" \
-                -e FE_ID=1 \
+                -e HOST_TYPE=IP \
                 -e JAVA_OPTS="-Xmx768m -Xms768m" \
                 starrocks/fe-ubuntu:latest
               EOF
@@ -100,7 +98,7 @@ resource "aws_instance" "starrocks_server" {
   }
 }
 
-# 4. Connection Output
+# 4. Connection String Output
 output "data_team_connection_string" {
   value       = "mysql -h ${aws_instance.starrocks_server.public_ip} -P 9030 -u root"
   description = "Share this connection command with the Data Analysis team"
