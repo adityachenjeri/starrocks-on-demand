@@ -67,7 +67,7 @@ resource "aws_instance" "starrocks_server" {
               apt-get update -y
               apt-get install -y docker.io
 
-              # Enable 2GB Swap Memory to ensure StarRocks fits in t3.micro RAM
+              # Enable 2GB Swap Memory to fit t3.micro limits
               fallocate -l 2G /swapfile
               chmod 600 /swapfile
               mkswap /swapfile
@@ -76,8 +76,14 @@ resource "aws_instance" "starrocks_server" {
               systemctl start docker
               systemctl enable docker
 
-              # Pull and run valid official StarRocks image
-              docker run -p 9030:9030 -p 8030:8030 -p 8040:8040 -itd --name starrocks starrocks/all-in-one-ubuntu
+              # Pull and run StarRocks using all-in-1 image
+              docker pull starrocks/all-in-1-ubuntu:latest || docker pull starrocks/all-in-1:latest
+              
+              if docker inspect starrocks/all-in-1-ubuntu:latest >/dev/null 2>&1; then
+                docker run -p 9030:9030 -p 8030:8030 -p 8040:8040 -itd --name starrocks starrocks/all-in-1-ubuntu:latest
+              else
+                docker run -p 9030:9030 -p 8030:8030 -p 8040:8040 -itd --name starrocks starrocks/all-in-1:latest
+              fi
               EOF
 
   tags = {
