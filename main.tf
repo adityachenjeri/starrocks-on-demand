@@ -11,7 +11,6 @@ provider "aws" {
   region = "us-east-1"
 }
 
-# 1. Dynamic AMI Lookup
 data "aws_ami" "ubuntu" {
   most_recent = true
 
@@ -25,10 +24,9 @@ data "aws_ami" "ubuntu" {
     values = ["hvm"]
   }
 
-  owners = ["099720109477"] # Canonical
+  owners = ["099720109477"]
 }
 
-# 2. Security Group
 resource "aws_security_group" "starrocks_sg" {
   name_prefix = "starrocks-sg-"
   description = "Allow MySQL access to StarRocks"
@@ -55,7 +53,6 @@ resource "aws_security_group" "starrocks_sg" {
   }
 }
 
-# 3. EC2 Instance
 resource "aws_instance" "starrocks_server" {
   ami           = data.aws_ami.ubuntu.id
   instance_type = "t3.micro"
@@ -73,7 +70,6 @@ resource "aws_instance" "starrocks_server" {
               apt-get update -y
               apt-get install -y docker.io mysql-client-core-8.0
 
-              # 4GB Swap allocation for t3.micro memory buffer
               fallocate -l 4G /swapfile
               chmod 600 /swapfile
               mkswap /swapfile
@@ -83,14 +79,14 @@ resource "aws_instance" "starrocks_server" {
               systemctl start docker
               systemctl enable docker
 
-              # Run FE with HOST_TYPE flag to allow single-node standalone startup
               docker run -d \
                 --name starrocks-fe \
                 --net=host \
                 --restart always \
                 -e HOST_TYPE=IP \
                 -e JAVA_OPTS="-Xmx768m -Xms768m" \
-                starrocks/fe-ubuntu:latest
+                starrocks/fe-ubuntu:latest \
+                /opt/starrocks/fe/bin/start_fe.sh
               EOF
 
   tags = {
@@ -98,7 +94,6 @@ resource "aws_instance" "starrocks_server" {
   }
 }
 
-# 4. Connection String Output
 output "data_team_connection_string" {
   value       = "mysql -h ${aws_instance.starrocks_server.public_ip} -P 9030 -u root"
   description = "Share this connection command with the Data Analysis team"
